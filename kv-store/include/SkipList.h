@@ -253,7 +253,49 @@ public:
      */
     bool erase(const key_type & _Key) noexcept
     {
-        // TODO
+        // 存储每层中指向待删除节点的前驱
+        std::vector<node_pointer> _Update_list(_Max_level_index + 1, nullptr);
+
+        node_pointer _Cur = _Head;
+
+        // 从顶层向下查找，记录每一层的前驱
+        for (level_type _Level = _Current_level_index; _Level >= 0; --_Level) {
+            while (_Cur->forward(_Level) != nullptr && _Cur->forward(_Level)->key() < _Key) {
+                _Cur = _Cur->forward(_Level);
+            }
+
+            _Update_list[_Level] = _Cur;
+        }
+
+        // 到达第0层，检查是否匹配
+        _Cur = _Cur->forward(0);
+
+        if (_Cur == nullptr || _Cur->key() != _Key) {
+            // 不存在这个节点，删除失败
+            return false;
+        }
+
+        // 开始删除节点
+        for (level_type _Level = 0; _Level <= _Current_level_index; ++_Level) {
+            if (_Update_list[_Level]->forward(_Level)->key() != _Cur->key()) {
+                // 从这里开始上层都没有该键值对了
+                break;
+            }
+
+            // 是该键值对，删除
+            _Update_list[_Level]->forward(_Level) = _Cur->forward(_Level);
+        }
+
+        // 删除节点
+        _Destroy_node(_Cur);
+
+        // 检查是否需要降低跳表的高度
+        while (_Current_level_index > 0 && _Head->forward(_Current_level_index) == nullptr) {
+            --_Current_level_index;
+        }
+
+        --_Size;
+
         return true;
     }
 
