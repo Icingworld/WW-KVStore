@@ -66,7 +66,7 @@ public:
      * @brief 获取值
      * @return 值
      */
-    const value_type & value() const noexcept
+    value_type & value() const noexcept
     {
         return _Value;
     }
@@ -86,7 +86,7 @@ public:
      * @param _Level 层级
      * @return 节点指针
      */
-    const node_pointer & forward(level_type _Level) const noexcept
+    node_pointer & forward(level_type _Level) const noexcept
     {
         return _Forward[_Level];
     }
@@ -194,7 +194,55 @@ public:
      */
     bool insert(const pair_type & _Pair) noexcept
     {
-        // TODO
+        // 使用一个数组来储存前一个结点的向前指针，为了避免越界，直接初始化大小为最大大小
+        std::vector<node_pointer> _Update_list(_Max_level_index + 1, nullptr);
+
+        // 从头节点开始向下寻找
+        node_pointer _Cur = _Head;
+
+        // 从最高层开始查找
+        for (level_type _Level = _Current_level_index; _Level >= 0; --_Level) {
+            while (_Cur->forward(_Level) != nullptr && _Cur->forward(_Level)->key() < _Pair.first) {
+                _Cur = _Cur->forward(_Level);
+            }
+
+            // 记录该节点，后续可能需要修改
+            _Update_list[_Level] = _Cur;
+        }
+
+        // 移动到0层，向后移动一个
+        _Cur = _Cur->forward(0);
+
+        // 判断是否已经存在
+        if (_Cur != nullptr && _Cur->key() == _Pair.first) {
+            return false;
+        }
+
+        // 不存在，创建新节点
+        level_type _New_level_index = _Random_level() - 1;
+        node_pointer _New_node = _Create_node(_Pair, _New_level_index);
+
+        // 如果新节点层级大于当前最高层级，将多出来的这些层级加入更新列表中
+        if (_New_level_index > _Current_level_index) {
+            for (level_type _Level = _Current_level_index + 1; _Level <= _New_level_index; ++_Level) {
+                // 由于跳表的开头必须是头节点，所以多出来的高度的前置都指向头节点即可
+                _Update_list[_Level] = _Head;
+            }
+
+            // 更新最高层级
+            _Current_level_index = _New_level_index;
+        }
+
+        // 开始遍历各层的前置节点并修改
+        for (level_type _Level = 0; _Level <= _New_level_index; ++_Level) {
+            // 将原来的指针添加到新节点中
+            _New_node->forward(_Level) = _Update_list[_Level]->forward(_Level);
+            // 将新节点添加到前置节点的向前列表中
+            _Update_list[_Level]->forward(_Level) = _New_node;
+        }
+
+        ++_Size;
+
         return true;
     }
 
