@@ -155,7 +155,20 @@ public:
      */
     void clear() noexcept
     {
-        // TODO
+        node_pointer _Cur = _Head->forward(0);
+
+        while (_Cur != nullptr) {
+            node_pointer _Next = _Cur->forward(0);
+            _Destroy_node(_Cur);
+            _Cur = _Next;
+        }
+
+        for (level_type _Level = 0; _Level <= _Current_level_index; ++_Level) {
+            _Head->forward(_Level) = nullptr;
+        }
+
+        _Current_level_index = 0;
+        _Size = 0;
     }
 
     /**
@@ -277,7 +290,7 @@ public:
 
         // 开始删除节点
         for (level_type _Level = 0; _Level <= _Current_level_index; ++_Level) {
-            if (_Update_list[_Level]->forward(_Level)->key() != _Cur->key()) {
+            if (_Update_list[_Level]->forward(_Level) != _Cur) {
                 // 从这里开始上层都没有该键值对了
                 break;
             }
