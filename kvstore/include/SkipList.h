@@ -66,7 +66,7 @@ public:
      * @brief 获取值
      * @return 值
      */
-    value_type & value() const noexcept
+    value_type & value() noexcept
     {
         return _Value;
     }
@@ -86,7 +86,7 @@ public:
      * @param _Level 层级
      * @return 节点指针
      */
-    node_pointer & forward(level_type _Level) const noexcept
+    node_pointer & forward(level_type _Level) noexcept
     {
         return _Forward[_Level];
     }
