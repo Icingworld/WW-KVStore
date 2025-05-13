@@ -65,7 +65,7 @@ public:
      * @brief 获取键值对
      * @return 键值对
      */
-    const pair_type & data() const noexcept
+    pair_type & data() noexcept
     {
         return _Data;
     }
@@ -739,7 +739,7 @@ private:
 
         // 判断是否已经存在
         if (_Ptr != nullptr && _Ptr->data().first == _Pair.first) {
-            return {iterator(nullptr), false};
+            return {iterator(_Ptr), false};
         }
 
         // 不存在，创建并插入新节点
