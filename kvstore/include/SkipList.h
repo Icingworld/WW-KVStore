@@ -11,6 +11,16 @@ namespace WW
 {
 
 /**
+ * @brief 跳表
+ * @tparam _Key 键类型
+ * @tparam _Value 值类型
+ */
+template <
+    typename _Ty_key,
+    typename _Ty_value
+> class _Skiplist;
+
+/**
  * @brief 跳表节点
  * @tparam _Key 键类型
  * @tparam _Value 值类型
@@ -168,9 +178,13 @@ public:
 
 protected:
     // 允许跳表类访问私有成员
-    friend class SkipList<_Ty_key, _Ty_value>;
+    friend class _Skiplist<_Ty_key, _Ty_value>;
 
-    node_pointer _Node() noexcept
+    /**
+     * @brief 获取迭代器所持有的节点指针
+     * @return 节点指针
+     */
+    node_pointer _Get_node() noexcept
     {
         return _Node;
     }
@@ -454,14 +468,14 @@ public:
             return end();
         }
 
-        level_type _Pos_max_level_index = _Pos._Node()->level();
+        level_type _Pos_max_level_index = _Pos._Get_node()->level();
 
         node_pointer _Cur = nullptr;
         for (level_type _Level = _Pos_max_level_index; _Level > 0; --_Level) {
             // 从头节点开始
             _Cur = _Head;
 
-            while (_Cur->forward(_Level) != _Pos._Node()) {
+            while (_Cur->forward(_Level) != _Pos._Get_node()) {
                 _Cur = _Cur->forward(_Level);
             }
 
@@ -472,7 +486,7 @@ public:
         // 第0层手动删除，因为需要返回迭代器
         _Cur = _Head;
 
-        while (_Cur->forward(0) != _Pos._Node()) {
+        while (_Cur->forward(0) != _Pos._Get_node()) {
             _Cur = _Cur->forward(0);
         }
 
@@ -480,7 +494,7 @@ public:
         _Cur->forward(0) = _Next_ptr;
 
         // 删除节点
-        _Destroy_node(_Pos._Node());
+        _Destroy_node(_Pos._Get_node());
 
         // 检查是否需要降低跳表的高度
         while (_Current_level_index > 0 && _Head->forward(_Current_level_index) == nullptr) {
@@ -681,7 +695,7 @@ private:
      * @param _Update_list 前驱记录数组
      * return 节点指针
      */
-    node_pointer _Create_and_insert(const pair_type & _Pair, const std::vector<node_pointer> & _Update_list)
+    node_pointer _Create_and_insert(const pair_type & _Pair, std::vector<node_pointer> & _Update_list)
     {
         // 创建新节点
         level_type _New_level_index = _Random_level() - 1;
