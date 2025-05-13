@@ -18,63 +18,51 @@ namespace WW
 template <
     typename _Ty_key,
     typename _Ty_value
-> class SkipListNode
+> class _Skip_list_node
 {
 public:
     using key_type = _Ty_key;
     using value_type = _Ty_value;
     using pair_type = std::pair<const _Ty_key, _Ty_value>;
     using level_type = int;
-    using node_pointer = SkipListNode<_Ty_key, _Ty_value> *;
+    using node_pointer = _Skip_list_node<_Ty_key, _Ty_value> *;
 
 private:
-    key_type _Key;                          // 键
-    value_type _Value;                      // 值
+    pair_type _Data;                        // 键值对
     std::vector<node_pointer> _Forward;     // 向前数组
 
 public:
-    SkipListNode()
-        : SkipListNode(pair_type(), 0)
+    _Skip_list_node()
+        : _Skip_list_node(pair_type(), 0)
     {
     }
 
-    explicit SkipListNode(level_type _Level)
-        : SkipListNode(pair_type(), _Level)
+    explicit _Skip_list_node(level_type _Level)
+        : _Skip_list_node(pair_type(), _Level)
     {
     }
 
-    SkipListNode(const pair_type & _Pair, level_type _Level)
-        : _Key(_Pair.first)
-        , _Value(_Pair.second)
+    _Skip_list_node(const pair_type & _Pair, level_type _Level)
+        : _Data(_Pair)
         , _Forward(_Level + 1, nullptr)
     {
     }
 
-    ~SkipListNode() = default;
+    ~_Skip_list_node() = default;
 
 public:
     /**
-     * @brief 获取键
-     * @return 键
+     * @brief 获取键值对
+     * @return 键值对
      */
-    const key_type & key() const noexcept
+    const pair_type & data() const noexcept
     {
-        return _Key;
-    }
-
-    /**
-     * @brief 获取值
-     * @return 值
-     */
-    value_type & value() noexcept
-    {
-        return _Value;
+        return _Data;
     }
 
     /**
      * @brief 获取层级
      * @return 层级
-     * @exception 若`std::vector::size()`允许抛出异常，则允许抛出异常
      */
     const level_type level() const noexcept
     {
@@ -92,12 +80,145 @@ public:
     }
 
     /**
+     * @brief 获取该节点在指定层级的向前节点
+     * @param _Level 层级
+     * @return 节点指针
+     */
+    const node_pointer & forward(level_type _Level) const noexcept
+    {
+        return _Forward[_Level];
+    }
+
+    /**
      * @brief 设置值
      * @param value 值
      */
     void set_value(const value_type & value) noexcept
     {
-        _Value = value;
+        _Data.second = value;
+    }
+};
+
+/**
+ * @brief 跳表常量迭代器
+ */
+template <
+    typename _Ty_key,
+    typename _Ty_value
+> class _Skiplist_const_iterator
+{
+public:
+    using iterator_category = std::forward_iterator_tag;
+    using key_type = _Ty_key;
+    using value_type = _Ty_value;
+    using pair_type = std::pair<const _Ty_key, _Ty_value>;
+
+    using node_type = _Skip_list_node<key_type, value_type>;
+    using node_pointer = _Skip_list_node<key_type, value_type> *;
+    using self = _Skiplist_const_iterator<_Ty_key, _Ty_value>;
+
+protected:
+    node_pointer _Node;             // 节点指针
+
+public:
+    _Skiplist_const_iterator()
+        : _Node(nullptr)
+    { //空迭代器
+    }
+
+    _Skiplist_const_iterator(const node_pointer _Node)
+        : _Node(const_cast<node_pointer>(_Node))
+    {
+    }
+
+public:
+    const pair_type & operator*() const noexcept
+    {
+        return _Node->data();
+    }
+
+    const pair_type * operator->() const noexcept
+    {
+        return &(operator*());
+    }
+
+    self & operator++() noexcept
+    {
+        // 只需要在第0层级移动
+        _Node = _Node->forward(0);
+        return *this;
+    }
+
+    self operator++(int) noexcept
+    {
+        self _Tmp = *this;
+        ++*this;
+        return _Tmp;
+    }
+
+    bool operator==(const self & _Other) const noexcept
+    {
+        return _Node == _Other._Node;
+    }
+
+    bool operator!=(const self & _Other) const noexcept
+    {
+        return !(*this == _Other);
+    }
+};
+
+/**
+ * @brief 跳表迭代器
+ */
+template <
+    typename _Ty_key,
+    typename _Ty_value
+> class _Skiplist_iterator : public _Skiplist_const_iterator<_Ty_key, _Ty_value>
+{
+public:
+    using iterator_category = std::forward_iterator_tag;
+    using key_type = _Ty_key;
+    using value_type = _Ty_value;
+    using pair_type = std::pair<const _Ty_key, _Ty_value>;
+
+    using node_type = _Skip_list_node<key_type, value_type>;
+    using node_pointer = _Skip_list_node<key_type, value_type> *;
+    using self = _Skiplist_iterator<_Ty_key, _Ty_value>;
+    using base = _Skiplist_const_iterator<_Ty_key, _Ty_value>;
+
+public:
+    _Skiplist_iterator()
+        : base()
+    { //空迭代器
+    }
+
+    _Skiplist_iterator(node_pointer _Node)
+        : base(_Node)
+    {
+    }
+
+public:
+    pair_type & operator*() const noexcept
+    {
+        return const_cast<pair_type &>(base::operator*());
+    }
+
+    pair_type * operator->() const noexcept
+    {
+        return const_cast<pair_type *>(base::operator->());
+    }
+
+    self & operator++() noexcept
+    {
+        base::operator++();
+        return *this;
+    }
+
+    self operator++(int) noexcept
+    {
+        self _Tmp = *this;
+        ++*this;
+        return _Tmp;
     }
 };
 
@@ -109,7 +230,7 @@ public:
 template <
     typename _Ty_key,
     typename _Ty_value
-> class SkipList
+> class _Skiplist
 {
 public:
     using key_type = _Ty_key;
@@ -117,8 +238,8 @@ public:
     using pair_type = std::pair<const _Ty_key, _Ty_value>;
     using size_type = std::size_t;
     using level_type = int;
-    using node_type = SkipListNode<key_type, value_type>;
-    using node_pointer = SkipListNode<key_type, value_type> *;
+    using node_type = _Skip_list_node<key_type, value_type>;
+    using node_pointer = _Skip_list_node<key_type, value_type> *;
 
 private:
     node_pointer _Head;                 // 头节点
@@ -127,12 +248,12 @@ private:
     size_type _Size;                    // 节点个数
 
 public:
-    SkipList()
-        : SkipList(MAX_LEVEL)
+    _Skiplist()
+        : _Skiplist(MAX_LEVEL)
     {
     }
 
-    explicit SkipList(level_type _Max_level)
+    explicit _Skiplist(level_type _Max_level)
         : _Head(_Create_node(_Max_level - 1))
         , _Max_level_index(_Max_level - 1)
         , _Current_level_index(0)
@@ -140,7 +261,7 @@ public:
     {
     }
 
-    ~SkipList()
+    ~_Skiplist()
     {
         // 删除所有节点
         clear();
@@ -150,6 +271,30 @@ public:
     }
 
 public:
+    // 元素访问
+
+    // 容量
+
+    /**
+     * @brief 获取跳表大小
+     * @return 跳表大小
+     */
+    size_type size() const noexcept
+    {
+        return _Size;
+    }
+
+    /**
+     * @brief 判断跳表是否为空
+     * @return 是否为空
+     */
+    bool empty() const noexcept
+    {
+        return _Size == 0;
+    }
+
+    // 修改器
+
     /**
      * @brief 清空跳表
      */
@@ -172,35 +317,6 @@ public:
     }
 
     /**
-     * @brief 获取跳表大小
-     * @return 跳表大小
-     */
-    size_type size() const noexcept
-    {
-        return _Size;
-    }
-
-    /**
-     * @brief 判断跳表是否为空
-     * @return 是否为空
-     */
-    bool empty() const noexcept
-    {
-        return _Size == 0;
-    }
-
-    /**
-     * @brief 查询一个键是否存在
-     * @param _Key 键
-     * @return 是否存在
-     */
-    bool contains(const key_type & _Key) const noexcept
-    {
-        node_pointer _Node_ptr = _Find(_Key);
-        return _Node_ptr != nullptr;
-    }
-
-    /**
      * @brief 当不存在键时，插入一个键值对
      * @param _Pair 键值对
      * @return 是否插入成功
@@ -215,7 +331,7 @@ public:
 
         // 从最高层开始查找
         for (level_type _Level = _Current_level_index; _Level >= 0; --_Level) {
-            while (_Cur->forward(_Level) != nullptr && _Cur->forward(_Level)->key() < _Pair.first) {
+            while (_Cur->forward(_Level) != nullptr && _Cur->forward(_Level)->data().first < _Pair.first) {
                 _Cur = _Cur->forward(_Level);
             }
 
@@ -227,7 +343,7 @@ public:
         _Cur = _Cur->forward(0);
 
         // 判断是否已经存在
-        if (_Cur != nullptr && _Cur->key() == _Pair.first) {
+        if (_Cur != nullptr && _Cur->data().first == _Pair.first) {
             return false;
         }
 
@@ -273,7 +389,7 @@ public:
 
         // 从顶层向下查找，记录每一层的前驱
         for (level_type _Level = _Current_level_index; _Level >= 0; --_Level) {
-            while (_Cur->forward(_Level) != nullptr && _Cur->forward(_Level)->key() < _Key) {
+            while (_Cur->forward(_Level) != nullptr && _Cur->forward(_Level)->data().first < _Key) {
                 _Cur = _Cur->forward(_Level);
             }
 
@@ -283,7 +399,7 @@ public:
         // 到达第0层，检查是否匹配
         _Cur = _Cur->forward(0);
 
-        if (_Cur == nullptr || _Cur->key() != _Key) {
+        if (_Cur == nullptr || _Cur->data().first != _Key) {
             // 不存在这个节点，删除失败
             return false;
         }
@@ -310,6 +426,19 @@ public:
         --_Size;
 
         return true;
+    }
+
+    // 查找
+
+    /**
+     * @brief 查询一个键是否存在
+     * @param _Key 键
+     * @return 是否存在
+     */
+    bool contains(const key_type & _Key) const noexcept
+    {
+        node_pointer _Node_ptr = _Find(_Key);
+        return _Node_ptr != nullptr;
     }
 
 private:
@@ -380,7 +509,7 @@ private:
         // 从当前最高层级开始查找
         for (level_type _Level = _Current_level_index; _Level >= 0; --_Level) {
             // 在当前层级中前进，直到找到大于等于_key的节点
-            while (_Cur->forward(_Level) != nullptr && _Cur->forward(_Level)->key() < _Key) {
+            while (_Cur->forward(_Level) != nullptr && _Cur->forward(_Level)->data().first < _Key) {
                 _Cur = _Cur->forward(_Level);
             }
         }
@@ -389,7 +518,7 @@ private:
         _Cur = _Cur->forward(0);
 
         // 判断该节点是不是目标节点
-        if (_Cur != nullptr && _Cur->key() == _Key) {
+        if (_Cur != nullptr && _Cur->data().first == _Key) {
             return _Cur;
         }
 
