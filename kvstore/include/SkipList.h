@@ -165,6 +165,15 @@ public:
     {
         return !(*this == _Other);
     }
+
+protected:
+    // 允许跳表类访问私有成员
+    friend class SkipList<_Ty_key, _Ty_value>;
+
+    node_pointer _Node() noexcept
+    {
+        return _Node;
+    }
 };
 
 /**
@@ -414,38 +423,90 @@ public:
     /**
      * @brief 当不存在键时，插入一个键值对
      * @param _Pair 键值对
-     * @return 是否插入成功
+     * @return `std::pair<iterator, bool>`
      */
-    bool insert(const pair_type & _Pair) noexcept
+    std::pair<iterator, bool> insert(const pair_type & _Pair) noexcept
     {
-        // 使用一个数组来储存前一个结点的向前指针，为了避免越界，直接初始化大小为最大大小
-        std::vector<node_pointer> _Update_list(_Max_level_index + 1, nullptr);
-        node_pointer _Ptr = _Find_with_update(_Pair.first, _Update_list);
-
-        // 判断是否已经存在
-        if (_Ptr != nullptr && _Ptr->data().first == _Pair.first) {
-            return false;
-        }
-
-        // 不存在，创建并插入新节点
-        _Create_and_insert(_Pair, _Update_list);
-
-        return true;
+        return _Insert(_Pair);
     }
 
     /**
-     * @brief 删除一个键值对
-     * @param _Key 键
-     * @return 是否删除成功
+     * @brief 当不存在键时，插入一个键值对
+     * @param _Pair 键值对
+     * @return `std::pair<iterator, bool>`
      */
-    bool erase(const key_type & _Key) noexcept
+    std::pair<iterator, bool> insert(pair_type && _Pair) noexcept
+    {
+        return _Insert(std::move(_Pair));
+    }
+
+    /**
+     * @brief 擦除元素
+     * @param _Pos 迭代器
+     * @return 后随被删除元素的迭代器
+     */
+    iterator erase(const_iterator _Pos)
+    {
+        // 由于跳表的特性，_Pos代表的节点有自己的最高层级
+        // 只需要在这些层级中删除即可
+
+        if (_Pos == end()) {
+            return end();
+        }
+
+        level_type _Pos_max_level_index = _Pos._Node()->level();
+
+        node_pointer _Cur = nullptr;
+        for (level_type _Level = _Pos_max_level_index; _Level > 0; --_Level) {
+            // 从头节点开始
+            _Cur = _Head;
+
+            while (_Cur->forward(_Level) != _Pos._Node()) {
+                _Cur = _Cur->forward(_Level);
+            }
+
+            // 找到该节点的前驱节点，开始跳过
+            _Cur->forward(_Level) = _Cur->forward(_Level)->forward(_Level);
+        }
+
+        // 第0层手动删除，因为需要返回迭代器
+        _Cur = _Head;
+
+        while (_Cur->forward(0) != _Pos._Node()) {
+            _Cur = _Cur->forward(0);
+        }
+
+        node_pointer _Next_ptr = _Cur->forward(0)->forward(0);
+        _Cur->forward(0) = _Next_ptr;
+
+        // 删除节点
+        _Destroy_node(_Pos._Node());
+
+        // 检查是否需要降低跳表的高度
+        while (_Current_level_index > 0 && _Head->forward(_Current_level_index) == nullptr) {
+            --_Current_level_index;
+        }
+
+        // 更新节点个数
+        --_Size;
+
+        // 返回该节点迭代器
+        return iterator(_Next_ptr);
+    }
+
+    /**
+     * @brief 删除指定键的元素
+     * @param _Key 键
+     * @return 被删除的元素个数
+     */
+    size_type erase(const key_type & _Key) noexcept
     {
         std::vector<node_pointer> _Update_list(_Max_level_index + 1, nullptr);
         node_pointer _Ptr = _Find_with_update(_Key, _Update_list);
 
         if (_Ptr == nullptr || _Ptr->data().first != _Key) {
             // 不存在这个节点，删除失败
-            return false;
+            return 0;
         }
 
         // 开始删除节点
@@ -469,10 +530,30 @@ public:
 
         --_Size;
 
-        return true;
+        return 1;
     }
 
     // 查找
+
+    /**
+     * @brief 寻找带有特定键的元素
+     * @param _Key 键
+     * @return 迭代器
+     */
+    iterator find(const key_type & _Key) noexcept
+    {
+        return iterator(_Find(_Key));
+    }
+
+    /**
+     * @brief 寻找带有特定键的元素
+     * @param _Key 键
+     * @return 迭代器
+     */
+    const_iterator find(const key_type & _Key) const noexcept
+    {
+        return const_iterator(_Find(_Key));
+    }
 
     /**
      * @brief 查询一个键是否存在
@@ -628,6 +709,29 @@ private:
         ++_Size;
 
         return _New_node;
+    }
+
+    /**
+     * @brief 当不存在键时，插入一个键值对
+     * @param _Pair 键值对
+     * @return `std::pair<iterator, bool>`
+     */
+    template<typename _P>
+    std::pair<iterator, bool> _Insert(_P && _Pair)
+    {
+        // 使用一个数组来储存前一个结点的向前指针，为了避免越界，直接初始化大小为最大大小
+        std::vector<node_pointer> _Update_list(_Max_level_index + 1, nullptr);
+        node_pointer _Ptr = _Find_with_update(_Pair.first, _Update_list);
+
+        // 判断是否已经存在
+        if (_Ptr != nullptr && _Ptr->data().first == _Pair.first) {
+            return {iterator(nullptr), false};
+        }
+
+        // 不存在，创建并插入新节点
+        _Ptr = _Create_and_insert(std::forward<_P>(_Pair), _Update_list);
+
+        return {iterator(_Ptr), true};
     }
 
     /**
