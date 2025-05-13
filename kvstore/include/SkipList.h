@@ -237,6 +237,9 @@ public:
     using value_type = _Ty_value;
     using pair_type = std::pair<const _Ty_key, _Ty_value>;
     using size_type = std::size_t;
+    using iterator = _Skiplist_iterator<key_type, value_type>;
+    using const_iterator = _Skiplist_const_iterator<key_type, value_type>;
+
     using level_type = int;
     using node_type = _Skip_list_node<key_type, value_type>;
     using node_pointer = _Skip_list_node<key_type, value_type> *;
@@ -272,6 +275,98 @@ public:
 
 public:
     // 元素访问
+
+    /**
+     * @brief 带越界检查访问指定的元素
+     */
+    value_type & at(const key_type & _Key)
+    {
+        node_pointer _Ptr = _Find(_Key);
+        if (_Ptr == nullptr) {
+            _Throw_out_of_range();
+        }
+
+        return _Ptr->data().second;
+    }
+
+    /**
+     * @brief 带越界检查访问指定的元素
+     */
+    const value_type & at(const key_type & _Key) const
+    {
+        node_pointer _Ptr = _Find(_Key);
+        if (_Ptr == nullptr) {
+            _Throw_out_of_range();
+        }
+
+        return _Ptr->data().second;
+    }
+
+    /**
+     * @brief 访问或插入指定的元素
+     */
+    value_type & operator[](const key_type & _Key)
+    {
+        return _Get_or_insert(_Key);
+    }
+
+    /**
+     * @brief 访问或插入指定的元素
+     */
+    value_type & operator[](key_type && _Key)
+    {
+        return _Get_or_insert(std::move(_Key));
+    }
+
+    // 迭代器
+
+    /**
+     * @brief 返回指向起始的迭代器
+     */
+    iterator begin() noexcept
+    {
+        return ++iterator(_Head);
+    }
+
+    /**
+     * @brief 返回指向起始的迭代器
+     */
+    const_iterator begin() const noexcept
+    {
+        return ++const_iterator(_Head);
+    }
+
+    /**
+     * @brief 返回指向起始的迭代器
+     */
+    const_iterator cbegin() const noexcept
+    {
+        return begin();
+    }
+
+    /**
+     * @brief 返回指向末尾的迭代器
+     */
+    iterator end() noexcept
+    {
+        return iterator(nullptr);
+    }
+
+    /**
+     * @brief 返回指向末尾的迭代器
+     */
+    const_iterator end() const noexcept
+    {
+        return const_iterator(nullptr);
+    }
+
+    /**
+     * @brief 返回指向末尾的迭代器
+     */
+    const_iterator cend() const noexcept
+    {
+        return end();
+    }
 
     // 容量
 
@@ -325,52 +420,15 @@ public:
     {
         // 使用一个数组来储存前一个结点的向前指针，为了避免越界，直接初始化大小为最大大小
         std::vector<node_pointer> _Update_list(_Max_level_index + 1, nullptr);
-
-        // 从头节点开始向下寻找
-        node_pointer _Cur = _Head;
-
-        // 从最高层开始查找
-        for (level_type _Level = _Current_level_index; _Level >= 0; --_Level) {
-            while (_Cur->forward(_Level) != nullptr && _Cur->forward(_Level)->data().first < _Pair.first) {
-                _Cur = _Cur->forward(_Level);
-            }
-
-            // 记录该节点，后续可能需要修改
-            _Update_list[_Level] = _Cur;
-        }
-
-        // 移动到0层，向后移动一个
-        _Cur = _Cur->forward(0);
+        node_pointer _Ptr = _Find_with_update(_Pair.first, _Update_list);
 
         // 判断是否已经存在
-        if (_Cur != nullptr && _Cur->data().first == _Pair.first) {
+        if (_Ptr != nullptr && _Ptr->data().first == _Pair.first) {
             return false;
         }
 
-        // 不存在，创建新节点
-        level_type _New_level_index = _Random_level() - 1;
-        node_pointer _New_node = _Create_node(_Pair, _New_level_index);
-
-        // 如果新节点层级大于当前最高层级，将多出来的这些层级加入更新列表中
-        if (_New_level_index > _Current_level_index) {
-            for (level_type _Level = _Current_level_index + 1; _Level <= _New_level_index; ++_Level) {
-                // 由于跳表的开头必须是头节点，所以多出来的高度的前置都指向头节点即可
-                _Update_list[_Level] = _Head;
-            }
-
-            // 更新最高层级
-            _Current_level_index = _New_level_index;
-        }
-
-        // 开始遍历各层的前置节点并修改
-        for (level_type _Level = 0; _Level <= _New_level_index; ++_Level) {
-            // 将原来的指针添加到新节点中
-            _New_node->forward(_Level) = _Update_list[_Level]->forward(_Level);
-            // 将新节点添加到前置节点的向前列表中
-            _Update_list[_Level]->forward(_Level) = _New_node;
-        }
-
-        ++_Size;
+        // 不存在，创建并插入新节点
+        _Create_and_insert(_Pair, _Update_list);
 
         return true;
     }
@@ -382,41 +440,27 @@ public:
      */
     bool erase(const key_type & _Key) noexcept
     {
-        // 存储每层中指向待删除节点的前驱
         std::vector<node_pointer> _Update_list(_Max_level_index + 1, nullptr);
+        node_pointer _Ptr = _Find_with_update(_Key, _Update_list);
 
-        node_pointer _Cur = _Head;
-
-        // 从顶层向下查找，记录每一层的前驱
-        for (level_type _Level = _Current_level_index; _Level >= 0; --_Level) {
-            while (_Cur->forward(_Level) != nullptr && _Cur->forward(_Level)->data().first < _Key) {
-                _Cur = _Cur->forward(_Level);
-            }
-
-            _Update_list[_Level] = _Cur;
-        }
-
-        // 到达第0层，检查是否匹配
-        _Cur = _Cur->forward(0);
-
-        if (_Cur == nullptr || _Cur->data().first != _Key) {
+        if (_Ptr == nullptr || _Ptr->data().first != _Key) {
             // 不存在这个节点，删除失败
             return false;
         }
 
         // 开始删除节点
         for (level_type _Level = 0; _Level <= _Current_level_index; ++_Level) {
-            if (_Update_list[_Level]->forward(_Level) != _Cur) {
+            if (_Update_list[_Level]->forward(_Level) != _Ptr) {
                 // 从这里开始上层都没有该键值对了
                 break;
             }
 
             // 是该键值对，删除
-            _Update_list[_Level]->forward(_Level) = _Cur->forward(_Level);
+            _Update_list[_Level]->forward(_Level) = _Ptr->forward(_Level);
         }
 
         // 删除节点
-        _Destroy_node(_Cur);
+        _Destroy_node(_Ptr);
 
         // 检查是否需要降低跳表的高度
         while (_Current_level_index > 0 && _Head->forward(_Current_level_index) == nullptr) {
@@ -523,6 +567,93 @@ private:
         }
 
         return nullptr;
+    }
+
+    /**
+     * @brief 带前驱记录的查找节点
+     * @param _Key 键
+     * @param _Update_list 前驱记录数组
+     * @return 节点指针
+     */
+    node_pointer _Find_with_update(const key_type & _Key, std::vector<node_pointer> & _Update_list) const noexcept
+    {
+        node_pointer _Cur = _Head;
+
+        // 从顶层向下查找，记录每一层的前驱
+        for (level_type _Level = _Current_level_index; _Level >= 0; --_Level) {
+            while (_Cur->forward(_Level) != nullptr && _Cur->forward(_Level)->data().first < _Key) {
+                _Cur = _Cur->forward(_Level);
+            }
+
+            _Update_list[_Level] = _Cur;
+        }
+
+        // 到达第0层，下一个就是目标节点
+        _Cur = _Cur->forward(0);
+
+        return _Cur;
+    }
+
+    /**
+     * @brief 创建节点并插入
+     * @param _Pair 键值对
+     * @param _Update_list 前驱记录数组
+     * return 节点指针
+     */
+    node_pointer _Create_and_insert(const pair_type & _Pair, const std::vector<node_pointer> & _Update_list)
+    {
+        // 创建新节点
+        level_type _New_level_index = _Random_level() - 1;
+        node_pointer _New_node = _Create_node(_Pair, _New_level_index);
+
+        // 如果新节点层级大于当前最高层级，将多出来的这些层级加入更新列表中
+        if (_New_level_index > _Current_level_index) {
+            for (level_type _Level = _Current_level_index + 1; _Level <= _New_level_index; ++_Level) {
+                // 由于跳表的开头必须是头节点，所以多出来的高度的前置都指向头节点即可
+                _Update_list[_Level] = _Head;
+            }
+
+            // 更新最高层级
+            _Current_level_index = _New_level_index;
+        }
+
+        // 开始遍历各层的前置节点并修改
+        for (level_type _Level = 0; _Level <= _New_level_index; ++_Level) {
+            // 将原来的指针添加到新节点中
+            _New_node->forward(_Level) = _Update_list[_Level]->forward(_Level);
+            // 将新节点添加到前置节点的向前列表中
+            _Update_list[_Level]->forward(_Level) = _New_node;
+        }
+
+        ++_Size;
+
+        return _New_node;
+    }
+
+    /**
+     * @brief 获取值或插入
+     * @param _Key 键
+     * return 值
+     */
+    template <typename _K>
+    value_type & _Get_or_insert(_K && _Key)
+    {
+        std::vector<node_pointer> _Update_list(_Max_level_index + 1, nullptr);
+        node_pointer _Ptr = _Find_with_update(_Key, _Update_list);
+        if (_Ptr == nullptr || _Ptr->data().first != _Key) {
+            // 不存在该键，创建并插入
+            _Ptr = _Create_and_insert({_Key, value_type()}, _Update_list);
+        }
+
+        return _Ptr->data().second;
+    }
+
+    /**
+     * @brief 抛出越界异常
+     */
+    [[noreturn]] void _Throw_out_of_range() const
+    {
+        throw std::out_of_range("skiplist key not found");
     }
 };
 
